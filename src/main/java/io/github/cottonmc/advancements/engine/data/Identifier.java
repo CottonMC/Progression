@@ -11,7 +11,6 @@ public class Identifier {
         this.path = path;
     }
 
-
     public String getDomain() {
         return domain;
     }
