@@ -2,6 +2,7 @@ package io.github.cottonmc.advancements.engine;
 
 import io.github.cottonmc.advancements.engine.data.Advancement;
 import io.github.cottonmc.advancements.engine.data.Identifier;
+import io.github.cottonmc.advancements.engine.events.Event;
 import io.github.cottonmc.advancements.engine.storage.AdvancementStorage;
 
 import java.util.*;
@@ -9,49 +10,76 @@ import java.util.function.Consumer;
 
 /**
  * The manager class that stores and organises the advancements
- * */
+ */
 public class AdvancementEngine<T extends AdvancementStorage> {
 
-    //storing them in a map for quick access.
+
     private Map<Identifier, Advancement<T>> storage;
-    //a list that stores functions that will run when adding a new advancement
-    private List<Consumer<Advancement<T>>> addCallbacks;
-    public AdvancementEngine(){
+
+    private List<Consumer<Advancement<T>>> callbacks;
+
+    private Map<Identifier, Event<T>> eventMap;
+
+    public AdvancementEngine() {
         storage = new HashMap<>();
-        addCallbacks = new LinkedList<>();
+        callbacks = new LinkedList<>();
+        eventMap = new HashMap<>();
     }
 
-    public void addAdvancement(Advancement<T> advancement){
-        storage.put(advancement.getID(),advancement);
-        for (Consumer<Advancement<T>> addCallback : addCallbacks) {
+    public void addAdvancement(Advancement<T> advancement) {
+        storage.put(advancement.getID(), advancement);
+        for (Consumer<Advancement<T>> addCallback : callbacks) {
             addCallback.accept(advancement);
         }
     }
 
-    public Advancement<T> getAdvancement(Identifier identifier){
+    public Advancement<T> getAdvancement(Identifier identifier) {
         return storage.get(identifier);
     }
 
-    public void addAddCallback(Consumer<Advancement<T>> callback){
-        addCallbacks.add(callback);
+    public void addCallback(Consumer<Advancement<T>> callback) {
+        callbacks.add(callback);
     }
 
-    public boolean canComplete(Identifier advancement, AdvancementStorage clientStorage){
-        if(!this.storage.containsKey(advancement))
+    public void addEventhandler(Event<T> event) {
+        Identifier advancement = event.getAdvancement();
+        if (storage.containsKey(advancement)) {
+            eventMap.put(advancement, event);
+        }
+    }
+
+    private boolean canComplete(Identifier advancement, AdvancementStorage clientStorage, boolean isNested) {
+        if (!this.storage.containsKey(advancement))
             return false;
 
         Advancement<T> advancementInstance = this.storage.get(advancement);
 
-        if(advancementInstance.hasRequired()){
+        if (advancementInstance.hasParents()) {
             for (Identifier identifier : advancementInstance.requiredAdvancements()) {
-                if(!this.storage.containsKey(identifier))
+                if (!this.storage.containsKey(identifier))
                     return false;
 
-                if(!canComplete(identifier,clientStorage))
+                if (!canComplete(identifier, clientStorage, true))
                     return false;
             }
         }
 
-        return true;//advancementInstance.isCompleted((T)storage);
+        if (isNested)
+            return clientStorage.isComplete(advancement);
+        return true;
     }
+
+    public boolean canComplete(Identifier advancement, AdvancementStorage clientStorage) {
+
+        boolean canComplete = canComplete(advancement, clientStorage, false);
+
+        if (canComplete) {
+            if (eventMap.containsKey(advancement)) {
+                eventMap.get(advancement).fire((T) clientStorage);
+            }
+            return true;
+        } else
+            return false;
+    }
+
 }

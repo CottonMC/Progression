@@ -10,7 +10,7 @@ public interface Advancement<T extends AdvancementStorage> {
 
     Identifier[] requiredAdvancements();
 
-    default boolean hasRequired(){
+    default boolean hasParents(){
         return requiredAdvancements().length >0;
     }
 }
